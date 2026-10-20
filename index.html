@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LOTTO 6aus49 — 3D Horizontal-Zylinder & Physik-Simulator (Gabriel)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0b0d12;
+      --panel: rgba(14, 18, 27, 0.96);
+      --border: rgba(51, 65, 85, 0.85);
+      --gold: #facc15;
+      --amber: #f59e0b;
+      --crimson: #dc2626;
+      --teal: #2dd4bf;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body, html {
+      width: 100%; height: 100%; overflow: hidden;
+      background: var(--bg); color: var(--text);
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      user-select: none;
+    }
+    #app { display: flex; flex-direction: column; width: 100vw; height: 100vh; }
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 20px; padding: 10px 24px; background: #0b0d12;
+      border-bottom: 1px solid rgba(30, 41, 59, 0.9); z-index: 30; flex-shrink: 0;
+    }
+    .brand {
+      display: flex; align-items: center; gap: 10px;
+      font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 18px;
+      letter-spacing: -0.02em; color: #fff; white-space: nowrap;
+    }
+    .brand span { color: var(--gold); }
+    .nav-links { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+    .nav-btn {
+      background: none; border: none; color: #cbd5e1; font-size: 13.5px; font-weight: 500;
+      font-family: inherit; cursor: pointer; padding: 4px 0;
+      border-bottom: 2px solid transparent; transition: color 0.15s, border-color 0.15s;
+      white-space: nowrap;
+    }
+    .nav-btn:hover, .nav-btn.active {
+      color: var(--gold); border-bottom-color: var(--gold);
+    }
+    .cta-btn {
+      background: var(--gold); color: #090b10; border: none; border-radius: 8px;
+      padding: 8px 14px; font-size: 12px; font-weight: 700; font-family: inherit;
+      cursor: pointer; white-space: nowrap; transition: background 0.15s;
+    }
+    .cta-btn:hover { background: #fde047; }
+
+    #viewport { position: relative; flex: 1; min-height: 0; width: 100%; overflow: hidden; }
+    #canvas-container { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; }
+    #canvas-container:active { cursor: grabbing; }
+
+    /* Top Readout HUD */
+    .top-hud {
+      position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+      width: min(960px, 95vw); background: var(--panel);
+      border: 1px solid rgba(30, 41, 59, 0.95); border-radius: 12px;
+      padding: 10px 16px; display: flex; flex-wrap: wrap;
+      align-items: center; justify-content: space-between; gap: 14px; z-index: 15;
+      box-shadow: 0 20px 45px rgba(0,0,0,0.65);
+    }
+    .hud-info { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+    .hud-info strong { color: #fde047; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; }
+    .hud-sub { color: #fda4af; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; }
+    .slots-bar { display: flex; align-items: center; gap: 6px; }
+    .slot-card {
+      background: rgba(15, 23, 42, 0.92); border: 1px solid rgba(51, 65, 85, 0.85);
+      border-radius: 8px; padding: 4px 10px; display: flex; flex-direction: column;
+      align-items: center; cursor: pointer; min-width: 54px; transition: border-color 0.15s, background 0.15s;
+    }
+    .slot-card:hover { border-color: #64748b; }
+    .slot-card.active { border-color: var(--gold); background: rgba(30, 41, 59, 0.98); }
+    .slot-card.spinning { border-color: var(--gold); background: rgba(69, 26, 3, 0.65); }
+    .slot-divider { width: 1px; height: 38px; background: #334155; margin: 0 4px; }
+    .slot-card.sz {
+      background: rgba(127, 29, 29, 0.72); border-color: rgba(185, 28, 28, 0.85);
+    }
+    .slot-card.sz.active { border-color: var(--gold); background: rgba(153, 27, 27, 0.9); }
+    .slot-top { font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--muted); }
+    .slot-card.sz .slot-top { color: #fde047; }
+    .slot-num {
+      font-size: 16px; font-weight: 700; font-family: 'JetBrains Mono', monospace;
+      color: #fde047; letter-spacing: 0.04em;
+    }
+    .slot-card.sz .slot-num { color: #ffffff; }
+    .slot-6x1 { font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #5eead4; }
+    .slot-card.sz .slot-6x1 { color: #fecdd3; }
+
+    /* Modals (Subtraction Matrix & Archive/Custom Input) */
+    .modal-wrap {
+      position: absolute; top: 96px; left: 50%; transform: translateX(-50%);
+      width: min(780px, 94vw); max-height: 70vh; background: #0f141f;
+      border: 1px solid #334155; border-radius: 12px; padding: 18px 20px;
+      z-index: 25; box-shadow: 0 25px 60px rgba(0,0,0,0.85);
+      display: none; flex-direction: column; color: #e2e8f0;
+    }
+    .modal-wrap.open { display: flex; }
+    .modal-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #1e293b;
+    }
+    .modal-head h2 { font-family: 'Outfit', sans-serif; font-size: 17px; color: #fff; }
+    .modal-head p { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .close-btn {
+      background: #1e293b; border: none; color: #94a3b8; width: 28px; height: 28px;
+      border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: 700;
+    }
+    .close-btn:hover { color: #fff; background: #334155; }
+    table { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+    th { text-align: left; padding: 8px; color: var(--muted); border-bottom: 1px solid #1e293b; }
+    td { padding: 8px; border-bottom: 1px solid rgba(30, 41, 59, 0.65); }
+    tr.click-row { cursor: pointer; }
+    tr.click-row:hover { background: rgba(30, 41, 59, 0.55); }
+    .custom-form {
+      display: grid; grid-template-columns: 1fr 110px 150px; gap: 10px;
+      padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #1e293b;
+    }
+    .custom-form label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+    .inp {
+      width: 100%; padding: 7px 10px; font-size: 12.5px; font-family: 'JetBrains Mono', monospace;
+      background: #090d16; border: 1px solid #334155; border-radius: 7px; color: #fff;
+    }
+    .archive-list { overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+    .arch-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 10px; border-radius: 7px; font-family: 'JetBrains Mono', monospace;
+      font-size: 12px; cursor: pointer; background: transparent; border: none; color: #e2e8f0;
+      text-align: left; width: 100%;
+    }
+    .arch-item:hover { background: rgba(30, 41, 59, 0.65); }
+    .arch-item.current { background: rgba(245, 158, 11, 0.15); color: var(--gold); }
+
+    /* Bottom Control Dock */
+    .bottom-dock {
+      position: fixed; bottom: 14px; left: 50%;
+      transform: translateX(-50%) translateY(0%);
+      width: min(960px, 95vw); z-index: 20; transition: transform 0.28s ease;
+    }
+    .bottom-dock.collapsed {
+      transform: translateX(-50%) translateY(calc(100% - 30px));
+    }
+    .dock-toggle { display: flex; justify-content: center; }
+    .dock-toggle button {
+      background: #111622; color: #cbd5e1; border: 1px solid var(--border);
+      border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 16px;
+      font-size: 11.5px; font-weight: 500; cursor: pointer; font-family: inherit;
+    }
+    .dock-toggle button:hover { color: #fff; }
+    .dock-body {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+      padding: 10px 14px; display: flex; flex-wrap: wrap; align-items: center;
+      justify-content: space-between; gap: 10px; box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+    }
+    .btn-group { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+    .btn {
+      background: #1e293b; color: #f1f5f9; border: 1px solid #475569;
+      border-radius: 8px; padding: 7px 11px; font-size: 12px; font-weight: 600;
+      font-family: inherit; cursor: pointer; display: inline-flex; align-items: center;
+      gap: 6px; white-space: nowrap; transition: background 0.15s;
+    }
+    .btn:hover { background: #334155; }
+    .btn.primary { background: var(--gold); color: #090b10; border-color: var(--gold); font-weight: 700; }
+    .btn.primary:hover { background: #fde047; }
+    .btn.amber-outline { background: #0f172a; color: #fde047; border-color: rgba(245, 158, 11, 0.45); font-family: 'JetBrains Mono', monospace; }
+    .seg-group {
+      display: flex; align-items: center; background: #0f172a;
+      border: 1px solid #334155; border-radius: 8px; padding: 2px;
+    }
+    .seg-btn {
+      background: transparent; border: none; color: #94a3b8; font-size: 11.5px;
+      font-weight: 600; padding: 5px 9px; border-radius: 6px; cursor: pointer;
+      font-family: inherit; white-space: nowrap;
+    }
+    .seg-btn:hover { color: #fff; }
+    .seg-btn.active { background: #334155; color: #fff; }
+    .seg-btn.gold-active { background: var(--gold); color: #090b10; }
+    .slider-wrap { display: flex; align-items: center; gap: 7px; font-size: 12px; color: #cbd5e1; }
+    input[type="range"] { width: 88px; accent-color: var(--gold); cursor: pointer; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="brand">
+        <svg width="30" height="30" viewBox="0 0 40 40" fill="none">
+          <rect width="40" height="40" rx="8" fill="#FACC15"/>
+          <circle cx="20" cy="11.5" r="5.8" fill="#DC2626"/>
+          <circle cx="20" cy="28.5" r="5.8" fill="#DC2626"/>
+          <circle cx="11.5" cy="20" r="5.8" fill="#DC2626"/>
+          <circle cx="28.5" cy="20" r="5.8" fill="#DC2626"/>
+          <circle cx="20" cy="20" r="5.2" fill="#FACC15"/>
+          <circle cx="20" cy="20" r="2.6" fill="#DC2626"/>
+        </svg>
+        <div>LOTTO <span>6aus49</span></div>
+      </div>
+
+      <nav class="nav-links">
+        <button class="nav-btn active" id="nav-overview">Gesamt-Zylinder</button>
+        <button class="nav-btn" id="nav-6x2">6×2 Zylinder-Ringe</button>
+        <button class="nav-btn" id="nav-sz">6×1 & Sonderzahl-Ring</button>
+        <button class="nav-btn" id="nav-matrix">Drehungs-Abzug (Matrix)</button>
+        <button class="nav-btn" id="nav-archive">Ziehungs-Archiv & Eingabe</button>
+      </nav>
+
+      <button class="cta-btn" id="btn-random-top">Zufalls-Physik-Ziehung</button>
+    </header>
+
+    <div id="viewport">
+      <div id="canvas-container"></div>
+
+      <!-- Top Readout Bar -->
+      <div class="top-hud">
+        <div class="hud-info">
+          <div>Horizontal-Zylinder (Gabriel) · <span id="draw-label">Ziehung 23.09.2026</span> · Sequenz: <strong id="seq-code">314192439413</strong></div>
+          <div class="hud-sub" id="sub-info">Drehung 2: Pool 48 → 47 Kugeln · Abgezogen vor Drehung 2: [03]</div>
+        </div>
+        <div class="slots-bar" id="slots-bar"></div>
+      </div>
+
+      <!-- Modal 1: Subtraction Matrix -->
+      <div class="modal-wrap" id="modal-matrix">
+        <div class="modal-head">
+          <div>
+            <h2>Mechanischer Drehungs- & Abzugs-Prozess im Horizontal-Zylinder</h2>
+            <p>6×2 Ziffern-Ringe + 6×1 Zylinder-Spur + Separater Sonderzahl-Ring</p>
+          </div>
+          <button class="close-btn" id="close-matrix">✕</button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Drehung / Ring</th>
+                <th>2-Ziffern (6×2)</th>
+                <th>6×1 auf Zylinder</th>
+                <th>Zylinder-Pool</th>
+                <th>Abgezogene Zahlen vor dieser Drehung</th>
+              </tr>
+            </thead>
+            <tbody id="matrix-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Modal 2: Archive & Custom Input -->
+      <div class="modal-wrap" id="modal-archive">
+        <div class="modal-head">
+          <div>
+            <h2>LOTTO 6aus49 Archiv & Eigene Zylinder-Zahlen</h2>
+            <p>Wähle eine Ziehung oder gib eigene 6 Zahlen (1–49) + Sonderzahl (0–9) ein.</p>
+          </div>
+          <button class="close-btn" id="close-archive">✕</button>
+        </div>
+        <form class="custom-form" id="custom-form">
+          <div>
+            <label>6 Hauptzahlen (1–49)</label>
+            <input class="inp" type="text" id="inp-nums" value="3, 14, 19, 24, 39, 41" />
+          </div>
+          <div>
+            <label>Sonderzahl (0–9)</label>
+            <input class="inp" type="number" id="inp-sz" min="0" max="9" value="3" />
+          </div>
+          <div style="display:flex;align-items:flex-end;">
+            <button type="submit" class="btn primary" style="width:100%;justify-content:center;">Auf Zylinder laden</button>
+          </div>
+        </form>
+        <div id="custom-err" style="color:#f87171;font-size:11.5px;margin-bottom:8px;display:none;"></div>
+        <div class="archive-list" id="archive-list"></div>
+      </div>
+
+      <!-- Bottom Control Dock -->
+      <div class="bottom-dock" id="bottom-dock">
+        <div class="dock-toggle">
+          <button id="toggle-dock">▾ Steuerung ausblenden (H)</button>
+        </div>
+        <div class="dock-body">
+          <div class="btn-group">
+            <button class="btn primary" id="btn-spin-all">▶ Alle 6+1 Drehungen starten</button>
+            <button class="btn" id="btn-step">⏭ Einzel-Drehung Schritt 1</button>
+            <button class="btn" id="btn-random-dock">⇄ Zufalls-Ziehung</button>
+            <button class="btn amber-outline" id="btn-gabriel">↺ 3·14·19·24·39·41 + SZ 3</button>
+          </div>
+          <div class="btn-group">
+            <div class="slider-wrap">
+              <label for="exp-slider">Ringe spreizen</label>
+              <input type="range" id="exp-slider" min="0" max="1" step="0.02" value="0" />
+            </div>
+            <div class="seg-group">
+              <button class="seg-btn active" id="ord-sorted">Sortiert</button>
+              <button class="seg-btn" id="ord-drawn">Ziehungsfolge</button>
+            </div>
+            <div class="seg-group">
+              <button class="seg-btn gold-active" data-cam="overview">Gesamt</button>
+              <button class="seg-btn" data-cam="rings6x2">6×2 Ringe</button>
+              <button class="seg-btn" data-cam="sonderzahl">SZ-Ring</button>
+              <button class="seg-btn" data-cam="physics">Physik</button>
+            </div>
+            <button class="btn" id="btn-finish">Finish: Gold</button>
+            <button class="btn" id="btn-sound" title="Audio Ein/Aus">🔊</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+    // Procedural Web Audio Synthesizer
+    class SoundSynth {
+      constructor() { this.ctx = null; this.enabled = true; this.lastTick = 0; this.lastBall = 0; }
+      getCtx() {
+        if (!this.enabled) return null;
+        if (!this.ctx) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (AC) this.ctx = new AC();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
+        return this.ctx;
+      }
+      playTick(vel) {
+        const ctx = this.getCtx(); if (!ctx) return;
+        const now = performance.now();
+        if (now - this.lastTick < Math.max(28, 130 - Math.abs(vel) * 18)) return;
+        this.lastTick = now;
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'triangle';
+        o.frequency.setValueAtTime(320 + Math.min(400, Math.abs(vel) * 45), ctx.currentTime);
+        o.frequency.exponentialRampToValueAtTime(90, ctx.currentTime + 0.025);
+        g.gain.setValueAtTime(0.055, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.025);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(); o.stop(ctx.currentTime + 0.028);
+      }
+      playLock(idx, isSz) {
+        const ctx = this.getCtx(); if (!ctx) return;
+        const t = ctx.currentTime;
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine';
+        const notes = [440, 493.88, 523.25, 587.33, 659.25, 783.99, 880];
+        o.frequency.setValueAtTime(isSz ? 880 : notes[Math.min(idx, 6)], t);
+        g.gain.setValueAtTime(0.09, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + (isSz ? 0.42 : 0.22));
+        o.connect(g); g.connect(ctx.destination);
+        o.start(t); o.stop(t + (isSz ? 0.44 : 0.24));
+      }
+    }
+    const sound = new SoundSynth();
+
+    const ARCHIVE = [{"id":"featured-2026-09-23","date":"23.09.2026","drawn":[3,14,39,19,24,41],"sorted":[3,14,19,24,39,41],"sz":3,"code":"314192439413"},{"id":"2026-10-17-613151930408","date":"17.10.2026","drawn":[40,13,15,19,30,6],"sorted":[6,13,15,19,30,40],"sz":8,"code":"613151930408"},{"id":"2026-10-14-413163336399","date":"14.10.2026","drawn":[13,16,4,33,39,36],"sorted":[4,13,16,33,36,39],"sz":9,"code":"413163336399"},{"id":"2026-10-10-1718293034381","date":"10.10.2026","drawn":[34,18,30,38,29,17],"sorted":[17,18,29,30,34,38],"sz":1,"code":"1718293034381"},{"id":"2026-10-07-1225293739421","date":"07.10.2026","drawn":[12,25,29,39,42,37],"sorted":[12,25,29,37,39,42],"sz":1,"code":"1225293739421"},{"id":"2026-10-03-57192433460","date":"03.10.2026","drawn":[33,24,7,19,5,46],"sorted":[5,7,19,24,33,46],"sz":0,"code":"57192433460"},{"id":"2026-09-30-56102038449","date":"30.09.2026","drawn":[38,5,20,6,44,10],"sorted":[5,6,10,20,38,44],"sz":9,"code":"56102038449"},{"id":"2026-09-26-611192023286","date":"26.09.2026","drawn":[28,6,19,23,20,11],"sorted":[6,11,19,20,23,28],"sz":6,"code":"611192023286"},{"id":"2026-09-19-1415293234409","date":"19.09.2026","drawn":[29,14,40,34,15,32],"sorted":[14,15,29,32,34,40],"sz":9,"code":"1415293234409"},{"id":"2026-09-16-315203233424","date":"16.09.2026","drawn":[32,15,33,42,3,20],"sorted":[3,15,20,32,33,42],"sz":4,"code":"315203233424"},{"id":"2026-09-12-1620253339450","date":"12.09.2026","drawn":[16,20,25,33,45,39],"sorted":[16,20,25,33,39,45],"sz":0,"code":"1620253339450"},{"id":"2026-09-09-724283039415","date":"09.09.2026","drawn":[30,7,39,28,24,41],"sorted":[7,24,28,30,39,41],"sz":5,"code":"724283039415"},{"id":"2026-09-05-611283137475","date":"05.09.2026","drawn":[6,31,37,11,28,47],"sorted":[6,11,28,31,37,47],"sz":5,"code":"611283137475"},{"id":"2026-09-02-819233244458","date":"02.09.2026","drawn":[8,45,32,44,19,23],"sorted":[8,19,23,32,44,45],"sz":8,"code":"819233244458"},{"id":"2026-08-29-918283941486","date":"29.08.2026","drawn":[28,39,18,48,41,9],"sorted":[9,18,28,39,41,48],"sz":6,"code":"918283941486"},{"id":"2026-08-26-615303342491","date":"26.08.2026","drawn":[6,30,42,49,15,33],"sorted":[6,15,30,33,42,49],"sz":1,"code":"615303342491"},{"id":"2025-12-31-3572836415","date":"31.12.2025","drawn":[3,7,28,5,36,41],"sorted":[3,5,7,28,36,41],"sz":5,"code":"3572836415"},{"id":"2025-12-24-78253237398","date":"24.12.2025","drawn":[25,37,39,32,8,7],"sorted":[7,8,25,32,37,39],"sz":8,"code":"78253237398"},{"id":"2024-12-28-713182840445","date":"28.12.2024","drawn":[18,7,40,28,13,44],"sorted":[7,13,18,28,40,44],"sz":5,"code":"713182840445"},{"id":"2023-12-30-426414447487","date":"30.12.2023","drawn":[4,48,41,47,44,26],"sorted":[4,26,41,44,47,48],"sz":7,"code":"426414447487"},{"id":"2022-12-31-413161832468","date":"31.12.2022","drawn":[46,16,18,4,13,32],"sorted":[4,13,16,18,32,46],"sz":8,"code":"413161832468"},{"id":"2021-12-29-610142031460","date":"29.12.2021","drawn":[31,20,14,46,6,10],"sorted":[6,10,14,20,31,46],"sz":0,"code":"610142031460"},{"id":"2020-12-30-58114044459","date":"30.12.2020","drawn":[11,8,44,5,40,45],"sorted":[5,8,11,40,44,45],"sz":9,"code":"58114044459"},{"id":"2013-05-04-57112122488","date":"04.05.2013","drawn":[48,7,5,11,22,21],"sorted":[5,7,11,21,22,48],"sz":8,"code":"57112122488"},{"id":"2013-05-01-912151622289","date":"01.05.2013","drawn":[22,12,15,28,16,9],"sorted":[9,12,15,16,22,28],"sz":9,"code":"912151622289"},{"id":"2000-12-30-2571727474","date":"30.12.2000","drawn":[17,47,2,27,5,7],"sorted":[2,5,7,17,27,47],"sz":4,"code":"2571727474"},{"id":"2000-12-02-432424345465","date":"02.12.2000","drawn":[46,4,45,32,42,43],"sorted":[4,32,42,43,45,46],"sz":5,"code":"432424345465"}];
+    let currentDraw = ARCHIVE[0];
+    let useSorted = true;
+    let activeStep = 8;
+    let isSpinning = false;
+    let explodedFactor = 0;
+    let selectedRing = 1;
+    let finishTheme = 'lotto-classic';
+    let seqInterval = null;
+
+    const BEZEL_ANGLE = -0.24;
+    const RING_OUTER_R = 1.92;
+    const MAIN_RING_WIDTH = 0.72;
+    const SUB_RING_WIDTH = 0.26;
+    const START_X = -3.15;
+    const CHAMBER_PITCH = 1.14;
+    const SZ_BASE_X = 3.85;
+
+    const container = document.getElementById('canvas-container');
+    const initW = Math.max(container.clientWidth, window.innerWidth, 800);
+    const initH = Math.max(container.clientHeight, window.innerHeight - 54, 500);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(initW, initH);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b0d12);
+    scene.fog = new THREE.FogExp2(0x0b0d12, 0.028);
+
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    pmrem.dispose();
+    const maxAniso = renderer.capabilities.getMaxAnisotropy() || 4;
+
+    const camera = new THREE.PerspectiveCamera(38, initW / initH, 0.1, 120);
+    camera.position.set(0.3, 2.3, 11.2);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.maxPolarAngle = Math.PI * 0.52;
+    controls.minDistance = 4.2;
+    controls.maxDistance = 22;
+    controls.target.set(0.3, 0.1, 0);
+
+    scene.add(new THREE.HemisphereLight(0xdbeafe, 0x1e1b4b, 0.65));
+    const keyLight = new THREE.DirectionalLight(0xfffbeb, 2.4);
+    keyLight.position.set(6, 9, 8);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.set(2048, 2048);
+    const d = 7.5;
+    keyLight.shadow.camera.left = -d; keyLight.shadow.camera.right = d;
+    keyLight.shadow.camera.top = d; keyLight.shadow.camera.bottom = -d;
+    keyLight.shadow.bias = -0.0005;
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.95);
+    fillLight.position.set(-7, 4, 6);
+    scene.add(fillLight);
+
+    const rimLight = new THREE.DirectionalLight(0xfde047, 1.2);
+    rimLight.position.set(0, 6, -8);
+    scene.add(rimLight);
+
+    // Materials
+    const brushedTitaniumMat = new THREE.MeshPhysicalMaterial({ color: 0x27272a, metalness: 0.88, roughness: 0.24, clearcoat: 0.25 });
+    const darkChassisMat = new THREE.MeshStandardMaterial({ color: 0x111827, metalness: 0.75, roughness: 0.52 });
+    const brushedGoldMat = new THREE.MeshPhysicalMaterial({ color: 0xfacc15, metalness: 0.92, roughness: 0.18, clearcoat: 0.4 });
+    const crimsonAccentMat = new THREE.MeshPhysicalMaterial({ color: 0xdc2626, metalness: 0.65, roughness: 0.25, clearcoat: 0.8 });
+    const opticalGlassMat = new THREE.MeshPhysicalMaterial({
+      color: 0xe0f2fe, metalness: 0, roughness: 0.06, transmission: 0.92, ior: 1.52,
+      thickness: 0.4, transparent: true, depthWrite: false, clearcoat: 1.0
+    });
+
+    const rootAssembly = new THREE.Group();
+    scene.add(rootAssembly);
+
+    // Floor & Pedestal
+    const floorMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(60, 60),
+      new THREE.MeshStandardMaterial({ color: 0x090b10, roughness: 0.85, metalness: 0.15 })
+    );
+    floorMesh.rotation.x = -Math.PI / 2;
+    floorMesh.position.y = -2.22;
+    floorMesh.receiveShadow = true;
+    scene.add(floorMesh);
+
+    const basePlatform = new THREE.Mesh(new THREE.BoxGeometry(10.8, 0.26, 3.6), darkChassisMat);
+    basePlatform.position.set(0.35, -2.07, 0);
+    basePlatform.receiveShadow = true; basePlatform.castShadow = true;
+    rootAssembly.add(basePlatform);
+
+    const baseGoldTrim = new THREE.Mesh(new THREE.BoxGeometry(10.9, 0.05, 3.68), brushedGoldMat);
+    baseGoldTrim.position.set(0.35, -1.92, 0);
+    rootAssembly.add(baseGoldTrim);
+
+    // Main Horizontal Shaft
+    const mainShaftGeo = new THREE.CylinderGeometry(0.32, 0.32, 10.2, 32);
+    mainShaftGeo.rotateZ(-Math.PI / 2);
+    rootAssembly.add(new THREE.Mesh(mainShaftGeo, brushedTitaniumMat));
+
+    // Inner Glass Mixing Drum + 6 Gold Agitator Ribs
+    const innerDrumGeo = new THREE.CylinderGeometry(1.48, 1.48, 6.9, 48, 1, true);
+    innerDrumGeo.rotateZ(-Math.PI / 2);
+    const innerDrumMesh = new THREE.Mesh(innerDrumGeo, opticalGlassMat);
+    innerDrumMesh.position.set(-0.3, 0, 0);
+    innerDrumMesh.renderOrder = 2;
+    rootAssembly.add(innerDrumMesh);
+
+    const innerCageGroup = new THREE.Group();
+    innerCageGroup.position.set(-0.3, 0, 0);
+    for (let b = 0; b < 6; b++) {
+      const a = (b / 6) * Math.PI * 2;
+      const barGeo = new THREE.CylinderGeometry(0.032, 0.032, 6.7, 12);
+      barGeo.rotateZ(-Math.PI / 2);
+      const bar = new THREE.Mesh(barGeo, brushedGoldMat);
+      bar.position.set(0, -Math.sin(a) * 1.4, Math.cos(a) * 1.4);
+      innerCageGroup.add(bar);
+    }
+    rootAssembly.add(innerCageGroup);
+
+    function createStanchion(xPos) {
+      const g = new THREE.Group();
+      g.position.set(xPos, 0, 0);
+      const collarGeo = new THREE.CylinderGeometry(1.15, 1.15, 0.34, 36);
+      collarGeo.rotateZ(-Math.PI / 2);
+      g.add(new THREE.Mesh(collarGeo, brushedTitaniumMat));
+      const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.32, 2.0, 0.95), darkChassisMat);
+      pillar.position.set(0, -1.0, 0);
+      g.add(pillar);
+      const capGeo = new THREE.CylinderGeometry(0.65, 0.65, 0.42, 24);
+      capGeo.rotateZ(-Math.PI / 2);
+      g.add(new THREE.Mesh(capGeo, brushedGoldMat));
+      return g;
+    }
+    const leftStanchion = createStanchion(-4.25);
+    const rightStanchion = createStanchion(4.95);
+    rootAssembly.add(leftStanchion, rightStanchion);
+
+    function createHorizontalRingGeo(radius, width, segs = 96) {
+      const geo = new THREE.BufferGeometry();
+      const pos = [], norm = [], uvs = [], idx = [];
+      const hw = width / 2;
+      for (let i = 0; i <= segs; i++) {
+        const f = i / segs, phi = f * Math.PI * 2;
+        const y = -radius * Math.sin(phi), z = radius * Math.cos(phi);
+        pos.push(-hw, y, z, hw, y, z);
+        norm.push(0, -Math.sin(phi), Math.cos(phi), 0, -Math.sin(phi), Math.cos(phi));
+        uvs.push(0, 1 - f, 1, 1 - f);
+      }
+      for (let i = 0; i < segs; i++) {
+        const a = i * 2, b = a + 1, c = a + 2, d = a + 3;
+        idx.push(a, b, c, b, d, c);
+      }
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(norm, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(idx);
+      return geo;
+    }
+
+    const MAIN_RING_SLOTS = 16;
+    const SINGLE_RING_SLOTS = 12;
+
+    function createMainRing49Tex(ringIndex, targetNumber, subtractedBefore) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512; canvas.height = 4096;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = finishTheme === 'obsidian-chrome' ? '#05070D' : '#070B14';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const slotHeight = canvas.height / MAIN_RING_SLOTS;
+      const targetSlot = (targetNumber - 1) % MAIN_RING_SLOTS;
+      const subSet = new Set(subtractedBefore);
+
+      const slotNumbers = new Array(MAIN_RING_SLOTS).fill(0);
+      slotNumbers[targetSlot] = targetNumber;
+      const used = new Set([targetNumber]);
+      const adjOffsets = [-1, 1, -2, 2, -3, 3, -4, 4, -5, 5, -6, 6, -7, 7, 8];
+      let adjPtr = 0;
+      for (const sNum of subtractedBefore) {
+        if (!used.has(sNum) && adjPtr < adjOffsets.length) {
+          const sIdx = (targetSlot + adjOffsets[adjPtr] + MAIN_RING_SLOTS) % MAIN_RING_SLOTS;
+          slotNumbers[sIdx] = sNum;
+          used.add(sNum);
+          adjPtr++;
+        }
+      }
+      let candOff = 1;
+      for (let k = 0; k < MAIN_RING_SLOTS; k++) {
+        const sIdx = (targetSlot + k) % MAIN_RING_SLOTS;
+        if (slotNumbers[sIdx] !== 0) continue;
+        while (candOff <= 49) {
+          const cand = ((targetNumber - 1 + candOff) % 49) + 1;
+          candOff++;
+          if (!used.has(cand)) {
+            slotNumbers[sIdx] = cand;
+            used.add(cand);
+            break;
+          }
+        }
+      }
+
+      for (let s = 0; s < MAIN_RING_SLOTS; s++) {
+        const num = slotNumbers[s] || 1;
+        const y0 = s * slotHeight, yCenter = y0 + slotHeight / 2;
+        const isTarget = s === targetSlot;
+        const isSub = !isTarget && subSet.has(num);
+
+        if (isTarget) {
+          ctx.fillStyle = '#FACC15';
+          ctx.fillRect(14, y0 + 8, canvas.width - 28, slotHeight - 16);
+          ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 6;
+          ctx.strokeRect(18, y0 + 12, canvas.width - 36, slotHeight - 24);
+          ctx.strokeStyle = '#090D16'; ctx.lineWidth = 4;
+          ctx.strokeRect(26, y0 + 20, canvas.width - 52, slotHeight - 40);
+        } else if (isSub) {
+          ctx.fillStyle = '#3B0A14';
+          ctx.fillRect(14, y0 + 6, canvas.width - 28, slotHeight - 12);
+          ctx.strokeStyle = '#EF4444'; ctx.lineWidth = 4;
+          ctx.strokeRect(18, y0 + 10, canvas.width - 36, slotHeight - 20);
+        } else {
+          ctx.fillStyle = s % 2 === 0 ? '#111A2E' : '#0B1220';
+          ctx.fillRect(14, y0 + 4, canvas.width - 28, slotHeight - 8);
+        }
+
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.35)'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(10, y0); ctx.lineTo(canvas.width - 10, y0); ctx.stroke();
+
+        const twoDigits = String(num).padStart(2, '0');
+        ctx.font = '800 28px "JetBrains Mono", monospace';
+        ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+        ctx.fillStyle = isSub ? '#FCA5A5' : (isTarget ? '#090D16' : '#94A3B8');
+        ctx.fillText(isSub ? '−ABZOG' : ('R' + (ringIndex + 1)), 34, y0 + 22);
+
+        ctx.font = isTarget ? '900 168px "JetBrains Mono", monospace' : '800 142px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        if (isSub) {
+          ctx.fillStyle = '#FCA5A5';
+          ctx.fillText(twoDigits, canvas.width / 2 + 18, yCenter + 8);
+          ctx.strokeStyle = '#EF4444'; ctx.lineWidth = 12;
+          ctx.beginPath(); ctx.moveTo(canvas.width / 2 - 115, yCenter + 8); ctx.lineTo(canvas.width / 2 + 145, yCenter + 8); ctx.stroke();
+        } else if (isTarget) {
+          ctx.lineWidth = 8; ctx.strokeStyle = '#FEF08A';
+          ctx.strokeText(twoDigits, canvas.width / 2 + 14, yCenter + 8);
+          ctx.fillStyle = '#050811';
+          ctx.fillText(twoDigits, canvas.width / 2 + 14, yCenter + 8);
+        } else {
+          ctx.lineWidth = 6; ctx.strokeStyle = '#020617';
+          ctx.strokeText(twoDigits, canvas.width / 2 + 14, yCenter + 6);
+          ctx.fillStyle = '#F8FAFC';
+          ctx.fillText(twoDigits, canvas.width / 2 + 14, yCenter + 6);
+        }
+      }
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = maxAniso;
+      tex.wrapS = THREE.ClampToEdgeWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      return tex;
+    }
+
+    function createSingleDigit10Tex(targetDigit, isSz, label) {
+      const canvas = document.createElement('canvas');
+      canvas.width = isSz ? 512 : 320; canvas.height = 3840;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = isSz ? '#160508' : '#07121A';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const slotHeight = canvas.height / SINGLE_RING_SLOTS;
+
+      for (let s = 0; s < SINGLE_RING_SLOTS; s++) {
+        const d = s % 10;
+        const y0 = s * slotHeight, yCenter = y0 + slotHeight / 2;
+        const isTarget = s === targetDigit;
+        if (isTarget) {
+          if (isSz) {
+            ctx.fillStyle = '#DC2626';
+            ctx.fillRect(14, y0 + 10, canvas.width - 28, slotHeight - 20);
+            ctx.strokeStyle = '#FACC15'; ctx.lineWidth = 10;
+            ctx.strokeRect(20, y0 + 16, canvas.width - 40, slotHeight - 32);
+          } else {
+            ctx.fillStyle = '#2DD4BF';
+            ctx.fillRect(10, y0 + 10, canvas.width - 20, slotHeight - 20);
+            ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 6;
+            ctx.strokeRect(14, y0 + 14, canvas.width - 28, slotHeight - 28);
+          }
+        } else if (s % 2 === 0) {
+          ctx.fillStyle = isSz ? '#26090F' : '#0E202E';
+          ctx.fillRect(10, y0 + 4, canvas.width - 20, slotHeight - 8);
+        }
+        ctx.strokeStyle = 'rgba(148,163,184,0.35)'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(10, y0); ctx.lineTo(canvas.width - 10, y0); ctx.stroke();
+
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        if (isSz) {
+          ctx.font = '800 34px "Outfit", sans-serif';
+          ctx.fillStyle = isTarget ? '#FDE047' : '#FCA5A5';
+          ctx.fillText(isTarget ? 'SONDERZAHL' : label, canvas.width / 2, y0 + 54);
+          ctx.font = '900 186px "JetBrains Mono", monospace';
+          if (isTarget) {
+            ctx.lineWidth = 8; ctx.strokeStyle = '#450A0A';
+            ctx.strokeText(String(d), canvas.width / 2, yCenter + 28);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillText(String(d), canvas.width / 2, yCenter + 28);
+          } else {
+            ctx.fillStyle = '#FCA5A5';
+            ctx.fillText(String(d), canvas.width / 2, yCenter + 22);
+          }
+        } else {
+          ctx.font = '900 176px "JetBrains Mono", monospace';
+          if (isTarget) {
+            ctx.lineWidth = 6; ctx.strokeStyle = '#CCFBF1';
+            ctx.strokeText(String(d), canvas.width / 2, yCenter + 8);
+            ctx.fillStyle = '#042F2E';
+            ctx.fillText(String(d), canvas.width / 2, yCenter + 8);
+          } else {
+            ctx.fillStyle = '#5EEAD4';
+            ctx.fillText(String(d), canvas.width / 2, yCenter + 8);
+          }
+        }
+      }
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = maxAniso;
+      tex.wrapS = THREE.ClampToEdgeWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      return tex;
+    }
+
+    const mainRingGeo = createHorizontalRingGeo(RING_OUTER_R, MAIN_RING_WIDTH, 96);
+    const subRingGeo = createHorizontalRingGeo(RING_OUTER_R - 0.02, SUB_RING_WIDTH, 64);
+    const flangeGeo = new THREE.CylinderGeometry(RING_OUTER_R + 0.04, RING_OUTER_R - 0.08, 0.04, 64);
+    flangeGeo.rotateZ(-Math.PI / 2);
+
+    const chamberGroups = [], mainMeshes = [], subMeshes = [];
+    const ringAngles = new Array(13).fill(0), ringTargets = new Array(13).fill(0);
+
+    for (let i = 0; i < 6; i++) {
+      const cg = new THREE.Group();
+      cg.position.set(START_X + i * CHAMBER_PITCH, 0, 0);
+
+      const mainMesh = new THREE.Mesh(
+        mainRingGeo,
+        new THREE.MeshStandardMaterial({
+          emissive: new THREE.Color(0xffffff),
+          emissiveIntensity: 0.78,
+          roughness: 0.95,
+          metalness: 0.0,
+          envMapIntensity: 0.0,
+          side: THREE.DoubleSide
+        })
+      );
+      mainMesh.position.set(-0.13, 0, 0);
+      mainMesh.userData = { ringIndex: i };
+      cg.add(mainMesh);
+      mainMeshes.push(mainMesh);
+
+      const leftFlange = new THREE.Mesh(flangeGeo, brushedTitaniumMat);
+      leftFlange.position.set(-0.13 - MAIN_RING_WIDTH / 2, 0, 0);
+      cg.add(leftFlange);
+
+      const subMesh = new THREE.Mesh(
+        subRingGeo,
+        new THREE.MeshStandardMaterial({
+          emissive: new THREE.Color(0xffffff),
+          emissiveIntensity: 0.78,
+          roughness: 0.95,
+          metalness: 0.0,
+          envMapIntensity: 0.0,
+          side: THREE.DoubleSide
+        })
+      );
+      subMesh.position.set(0.38, 0, 0);
+      subMesh.userData = { ringIndex: i };
+      cg.add(subMesh);
+      subMeshes.push(subMesh);
+
+      const divFlange = new THREE.Mesh(flangeGeo, brushedGoldMat);
+      divFlange.position.set(0.24, 0, 0);
+      cg.add(divFlange);
+
+      rootAssembly.add(cg);
+      chamberGroups.push(cg);
+    }
+
+    // 7th Separate Sonderzahl Ring
+    const sonderzahlGroup = new THREE.Group();
+    sonderzahlGroup.position.set(SZ_BASE_X, 0, 0);
+    const clutchGeo = new THREE.CylinderGeometry(0.68, 0.68, 0.55, 32);
+    clutchGeo.rotateZ(-Math.PI / 2);
+    const clutchMesh = new THREE.Mesh(clutchGeo, crimsonAccentMat);
+    clutchMesh.position.set(-0.78, 0, 0);
+    sonderzahlGroup.add(clutchMesh);
+
+    const szRingGeo = createHorizontalRingGeo(RING_OUTER_R + 0.08, 0.88, 64);
+    const szMesh = new THREE.Mesh(
+      szRingGeo,
+      new THREE.MeshStandardMaterial({
+        emissive: new THREE.Color(0xffffff),
+        emissiveIntensity: 0.82,
+        roughness: 0.95,
+        metalness: 0.0,
+        envMapIntensity: 0.0,
+        side: THREE.DoubleSide
+      })
+    );
+    szMesh.userData = { ringIndex: 6 };
+    sonderzahlGroup.add(szMesh);
+
+    const szFlangeGeo = new THREE.CylinderGeometry(RING_OUTER_R + 0.14, RING_OUTER_R, 0.06, 64);
+    szFlangeGeo.rotateZ(-Math.PI / 2);
+    const szLF = new THREE.Mesh(szFlangeGeo, brushedGoldMat); szLF.position.set(-0.46, 0, 0);
+    const szRF = new THREE.Mesh(szFlangeGeo, brushedGoldMat); szRF.position.set(0.46, 0, 0);
+    sonderzahlGroup.add(szLF, szRF);
+    rootAssembly.add(sonderzahlGroup);
+
+    // Front-Top Gold Reading Bezel Bar
+    const bezelBridge = new THREE.Group();
+    bezelBridge.position.set(0.3, -Math.sin(BEZEL_ANGLE) * (RING_OUTER_R + 0.12), Math.cos(BEZEL_ANGLE) * (RING_OUTER_R + 0.12));
+    bezelBridge.rotation.x = BEZEL_ANGLE;
+    const uRail = new THREE.Mesh(new THREE.BoxGeometry(8.9, 0.045, 0.11), brushedGoldMat); uRail.position.set(0, 0.42, 0);
+    const lRail = new THREE.Mesh(new THREE.BoxGeometry(8.9, 0.045, 0.11), brushedGoldMat); lRail.position.set(0, -0.42, 0);
+    bezelBridge.add(uRail, lRail);
+    rootAssembly.add(bezelBridge);
+
+    // 49 Physical Lotto Balls inside the Horizontal Cylinder
+    const ballsInst = new THREE.InstancedMesh(
+      new THREE.SphereGeometry(0.165, 20, 20),
+      new THREE.MeshPhysicalMaterial({ color: 0xfef08a, roughness: 0.18, metalness: 0.1, clearcoat: 0.9 }),
+      49
+    );
+    ballsInst.frustumCulled = false;
+    const palette = [0xfacc15, 0xf59e0b, 0x38bdf8, 0x4ade80, 0xf87171].map(c => new THREE.Color(c));
+    const simBalls = [];
+    for (let b = 0; b < 49; b++) {
+      const a = (b / 49) * Math.PI * 2, r = 0.4 + (b % 5) * 0.18;
+      simBalls.push({
+        num: b + 1,
+        pos: new THREE.Vector3(-2.8 + (b / 49) * 5.2, -Math.sin(a) * r, Math.cos(a) * r),
+        vel: new THREE.Vector3((Math.random() - 0.5) * 1.4, (Math.random() - 0.5) * 1.4, (Math.random() - 0.5) * 1.4)
+      });
+      ballsInst.setColorAt(b, palette[b % palette.length]);
+    }
+    rootAssembly.add(ballsInst);
+
+    // Camera Presets Target
+    const targetCamPos = new THREE.Vector3();
+    const targetLookAt = new THREE.Vector3();
+    function setCamPreset(preset) {
+      document.querySelectorAll('[data-cam]').forEach(b => {
+        b.classList.toggle('gold-active', b.getAttribute('data-cam') === preset);
+      });
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      if (preset === 'overview') {
+        document.getElementById('nav-overview').classList.add('active');
+        targetCamPos.set(0.3, 2.3, 11.2); targetLookAt.set(0.3, 0.1, 0);
+      } else if (preset === 'rings6x2') {
+        document.getElementById('nav-6x2').classList.add('active');
+        targetCamPos.set(-0.4, 1.3, 7.6); targetLookAt.set(-0.4, 0.25, 0);
+      } else if (preset === 'sonderzahl') {
+        document.getElementById('nav-sz').classList.add('active');
+        targetCamPos.set(3.6, 1.4, 5.8); targetLookAt.set(3.6, 0.2, 0);
+      } else if (preset === 'physics') {
+        targetCamPos.set(-1.5, 3.2, 7.2); targetLookAt.set(-0.3, 0.0, 0);
+      }
+    }
+
+    function syncDraw() {
+      const nums = useSorted ? currentDraw.sorted : currentDraw.drawn;
+      document.getElementById('draw-label').textContent = 'Ziehung ' + currentDraw.date;
+      document.getElementById('seq-code').textContent = nums.join('') + currentDraw.sz;
+
+      for (let i = 0; i < 6; i++) {
+        const num = nums[i], sub = nums.slice(0, i);
+        if (mainMeshes[i].material.map) mainMeshes[i].material.map.dispose();
+        const mTex = createMainRing49Tex(i, num, sub);
+        mainMeshes[i].material.map = mTex;
+        mainMeshes[i].material.emissiveMap = mTex;
+        mainMeshes[i].material.needsUpdate = true;
+
+        const d1 = num % 10;
+        if (subMeshes[i].material.map) subMeshes[i].material.map.dispose();
+        const sTex = createSingleDigit10Tex(d1, false, '6×1 #' + (i + 1));
+        subMeshes[i].material.map = sTex;
+        subMeshes[i].material.emissiveMap = sTex;
+        subMeshes[i].material.needsUpdate = true;
+
+        const rev = Math.floor(ringAngles[i] / (Math.PI * 2));
+        const tSlot = (num - 1) % MAIN_RING_SLOTS;
+        ringTargets[i] = BEZEL_ANGLE - ((tSlot + 0.5) / MAIN_RING_SLOTS) * Math.PI * 2 + rev * Math.PI * 2;
+        ringTargets[6 + i] = BEZEL_ANGLE - ((d1 + 0.5) / SINGLE_RING_SLOTS) * Math.PI * 2 + rev * Math.PI * 2;
+      }
+
+      if (szMesh.material.map) szMesh.material.map.dispose();
+      const szTex = createSingleDigit10Tex(currentDraw.sz, true, 'SZ');
+      szMesh.material.map = szTex;
+      szMesh.material.emissiveMap = szTex;
+      szMesh.material.needsUpdate = true;
+      const revSz = Math.floor(ringAngles[12] / (Math.PI * 2));
+      ringTargets[12] = BEZEL_ANGLE - ((currentDraw.sz + 0.5) / SINGLE_RING_SLOTS) * Math.PI * 2 + revSz * Math.PI * 2;
+
+      renderUI();
+    }
+
+    function renderUI() {
+      const nums = useSorted ? currentDraw.sorted : currentDraw.drawn;
+      const bar = document.getElementById('slots-bar');
+      bar.innerHTML = '';
+
+      nums.forEach((n, idx) => {
+        const spinning = isSpinning && activeStep <= idx + 1;
+        const card = document.createElement('button');
+        card.className = 'slot-card' + (selectedRing === idx ? ' active' : '') + (spinning ? ' spinning' : '');
+        card.innerHTML = `
+          <span class="slot-top">R${idx + 1} · −${idx}</span>
+          <span class="slot-num">${spinning ? '••' : String(n).padStart(2, '0')}</span>
+          <span class="slot-6x1">6×1: ${spinning ? '•' : (n % 10)}</span>
+        `;
+        card.onclick = () => { selectedRing = idx; renderUI(); };
+        bar.appendChild(card);
+      });
+
+      const div = document.createElement('div');
+      div.className = 'slot-divider';
+      bar.appendChild(div);
+
+      const szSpin = isSpinning && activeStep <= 7;
+      const szCard = document.createElement('button');
+      szCard.className = 'slot-card sz' + (selectedRing === 6 ? ' active' : '');
+      szCard.innerHTML = `
+        <span class="slot-top">SEP. RING</span>
+        <span class="slot-num">${szSpin ? '•' : currentDraw.sz}</span>
+        <span class="slot-6x1">Sonderzahl</span>
+      `;
+      szCard.onclick = () => { selectedRing = 6; setCamPreset('sonderzahl'); renderUI(); };
+      bar.appendChild(szCard);
+
+      const subInfo = document.getElementById('sub-info');
+      if (selectedRing < 6) {
+        const before = nums.slice(0, selectedRing).map(x => String(x).padStart(2, '0'));
+        subInfo.textContent = selectedRing === 0
+          ? 'Drehung 1: Pool 49 → 48 Kugeln · 1. Drehung: Alle 49 Zahlen im Zylinder'
+          : `Drehung ${selectedRing + 1}: Pool ${49 - selectedRing} → ${48 - selectedRing} Kugeln · Abgezogen vor Drehung ${selectedRing + 1}: [${before.join(', ')}]`;
+      } else {
+        subInfo.textContent = 'Drehung 7: Separater Sonderzahl-Ring (0–9) · Rechts auf der Hauptachse';
+      }
+
+      document.getElementById('btn-step').textContent =
+        isSpinning && activeStep <= 7
+          ? `⏭ Drehung ${activeStep} einrasten & abziehen`
+          : '⏭ Einzel-Drehung Schritt 1';
+
+      // Populate Subtraction Matrix Table
+      const tbody = document.getElementById('matrix-tbody');
+      tbody.innerHTML = '';
+      nums.forEach((n, idx) => {
+        const s = String(n).padStart(2, '0');
+        const before = nums.slice(0, idx).map(x => String(x).padStart(2, '0'));
+        const tr = document.createElement('tr');
+        tr.className = 'click-row';
+        tr.innerHTML = `
+          <td style="color:#f1f5f9;font-family:sans-serif;font-weight:600;">${idx + 1}. Drehung (Ring ${idx + 1})</td>
+          <td style="color:#fde047;font-weight:700;">${s} <span style="color:#64748b;">([${s[0]}][${s[1]}])</span></td>
+          <td style="color:#5eead4;font-weight:700;">${n % 10}</td>
+          <td>${49 - idx} − 1 = ${48 - idx} Kugeln</td>
+          <td style="color:#fda4af;">${before.length === 0 ? 'Keine (Start mit allen 49 Kugeln)' : '− [' + before.join(', ') + '] abgezogen'}</td>
+        `;
+        tr.onclick = () => { selectedRing = idx; document.getElementById('modal-matrix').classList.remove('open'); renderUI(); };
+        tbody.appendChild(tr);
+      });
+      const szTr = document.createElement('tr');
+      szTr.className = 'click-row';
+      szTr.style.background = 'rgba(127,29,29,0.25)';
+      szTr.innerHTML = `
+        <td style="color:#fde047;font-family:sans-serif;font-weight:700;">7. Separater Ring (Sonderzahl)</td>
+        <td style="color:#fff;font-weight:700;">— (Separater Ring)</td>
+        <td style="color:#fde047;font-weight:700;">SZ: ${currentDraw.sz}</td>
+        <td>10 Ziffern (0–9)</td>
+        <td>Zusätzlich auf separatem Ring rechts neben dem Zylinder</td>
+      `;
+      szTr.onclick = () => { selectedRing = 6; setCamPreset('sonderzahl'); document.getElementById('modal-matrix').classList.remove('open'); renderUI(); };
+      tbody.appendChild(szTr);
+    }
+
+    function startSequentialSpin(drawObj = currentDraw) {
+      currentDraw = drawObj;
+      if (seqInterval) clearInterval(seqInterval);
+      activeStep = 1; isSpinning = true; selectedRing = 0;
+      syncDraw();
+      for (let i = 0; i < 6; i++) {
+        ringAngles[i] = ringTargets[i] + (3 + i * 0.5) * Math.PI * 2;
+        ringAngles[6 + i] = ringTargets[6 + i] - (3 + i * 0.5) * Math.PI * 2;
+      }
+      ringAngles[12] = ringTargets[12] + 5 * Math.PI * 2;
+
+      seqInterval = setInterval(() => {
+        activeStep++;
+        if (activeStep <= 7) {
+          sound.playLock(activeStep - 2, false);
+          selectedRing = activeStep - 1;
+          renderUI();
+        } else {
+          sound.playLock(6, true);
+          isSpinning = false;
+          clearInterval(seqInterval);
+          renderUI();
+        }
+      }, 1000);
+    }
+
+    function triggerRandomPhysicsDraw() {
+      const pool = Array.from({ length: 49 }, (_, i) => i + 1);
+      const drawn = [];
+      for (let k = 0; k < 6; k++) {
+        const r = Math.floor(Math.random() * pool.length);
+        drawn.push(pool[r]); pool.splice(r, 1);
+      }
+      const sorted = [...drawn].sort((a, b) => a - b);
+      const sz = Math.floor(Math.random() * 10);
+      startSequentialSpin({ id: 'sim-' + Date.now(), date: 'Physik-Zufall', drawn, sorted, sz, code: sorted.join('') + sz });
+    }
+
+    // Top Navigation Bar Wire-Up
+    document.getElementById('nav-overview').onclick = () => {
+      document.getElementById('modal-matrix').classList.remove('open');
+      document.getElementById('modal-archive').classList.remove('open');
+      setCamPreset('overview');
+    };
+    document.getElementById('nav-6x2').onclick = () => {
+      document.getElementById('modal-matrix').classList.remove('open');
+      document.getElementById('modal-archive').classList.remove('open');
+      setCamPreset('rings6x2');
+    };
+    document.getElementById('nav-sz').onclick = () => {
+      document.getElementById('modal-matrix').classList.remove('open');
+      document.getElementById('modal-archive').classList.remove('open');
+      selectedRing = 6; renderUI();
+      setCamPreset('sonderzahl');
+    };
+    document.getElementById('nav-matrix').onclick = () => {
+      document.getElementById('modal-archive').classList.remove('open');
+      document.getElementById('modal-matrix').classList.toggle('open');
+    };
+    document.getElementById('nav-archive').onclick = () => {
+      document.getElementById('modal-matrix').classList.remove('open');
+      document.getElementById('modal-archive').classList.toggle('open');
+    };
+    document.getElementById('close-matrix').onclick = () => document.getElementById('modal-matrix').classList.remove('open');
+    document.getElementById('close-archive').onclick = () => document.getElementById('modal-archive').classList.remove('open');
+
+    // Archive List & Custom Form
+    const archListEl = document.getElementById('archive-list');
+    function renderArchiveList() {
+      archListEl.innerHTML = '';
+      ARCHIVE.forEach((d) => {
+        const btn = document.createElement('button');
+        btn.className = 'arch-item' + (d.id === currentDraw.id ? ' current' : '');
+        btn.innerHTML = `
+          <span><strong style="color:#94a3b8;margin-right:10px;">${d.date}</strong> ${d.sorted.map(n => String(n).padStart(2,'0')).join(' · ')} <span style="color:#fda4af;">+ SZ ${d.sz}</span></span>
+          <span>Code: <strong style="color:#fde047;">${d.code}</strong></span>
+        `;
+        btn.onclick = () => {
+          document.getElementById('modal-archive').classList.remove('open');
+          startSequentialSpin(d);
+        };
+        archListEl.appendChild(btn);
+      });
+    }
+    renderArchiveList();
+
+    document.getElementById('custom-form').onsubmit = (e) => {
+      e.preventDefault();
+      const errEl = document.getElementById('custom-err');
+      const nums = document.getElementById('inp-nums').value.split(/[\s,;.-]+/).map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+      const sz = parseInt(document.getElementById('inp-sz').value, 10);
+      if (nums.length !== 6 || nums.some(n => n < 1 || n > 49) || new Set(nums).size !== 6) {
+        errEl.textContent = 'Bitte genau 6 unterschiedliche Zahlen zwischen 1 und 49 eingeben.';
+        errEl.style.display = 'block';
+        return;
+      }
+      errEl.style.display = 'none';
+      const sorted = [...nums].sort((a, b) => a - b);
+      document.getElementById('modal-archive').classList.remove('open');
+      startSequentialSpin({ id: 'cust-' + Date.now(), date: 'Eigene Ziehung', drawn: nums, sorted, sz: isNaN(sz) ? 3 : sz, code: sorted.join('') + (isNaN(sz) ? 3 : sz) });
+    };
+
+    // Bottom Dock Wire-Up
+    document.getElementById('btn-spin-all').onclick = () => startSequentialSpin(currentDraw);
+    document.getElementById('btn-random-top').onclick = triggerRandomPhysicsDraw;
+    document.getElementById('btn-random-dock').onclick = triggerRandomPhysicsDraw;
+    document.getElementById('btn-gabriel').onclick = () => { useSorted = true; startSequentialSpin(ARCHIVE[0]); };
+    document.getElementById('btn-step').onclick = () => {
+      if (seqInterval) { clearInterval(seqInterval); seqInterval = null; }
+      if (!isSpinning && activeStep >= 8) {
+        activeStep = 1; isSpinning = true; selectedRing = 0;
+        for (let i = 0; i < 6; i++) {
+          ringAngles[i] = ringTargets[i] + 3 * Math.PI * 2;
+          ringAngles[6 + i] = ringTargets[6 + i] - 3 * Math.PI * 2;
+        }
+        ringAngles[12] = ringTargets[12] + 4 * Math.PI * 2;
+      } else if (isSpinning && activeStep < 7) {
+        sound.playLock(activeStep - 1, false);
+        activeStep++; selectedRing = activeStep - 1;
+      } else {
+        sound.playLock(6, true);
+        activeStep = 8; isSpinning = false; selectedRing = 6;
+      }
+      renderUI();
+    };
+    document.getElementById('exp-slider').oninput = (e) => { explodedFactor = parseFloat(e.target.value); };
+    document.getElementById('ord-sorted').onclick = () => {
+      useSorted = true;
+      document.getElementById('ord-sorted').classList.add('active');
+      document.getElementById('ord-drawn').classList.remove('active');
+      syncDraw();
+    };
+    document.getElementById('ord-drawn').onclick = () => {
+      useSorted = false;
+      document.getElementById('ord-drawn').classList.add('active');
+      document.getElementById('ord-sorted').classList.remove('active');
+      syncDraw();
+    };
+    document.querySelectorAll('[data-cam]').forEach(btn => {
+      btn.onclick = () => setCamPreset(btn.getAttribute('data-cam'));
+    });
+    document.getElementById('btn-finish').onclick = (e) => {
+      finishTheme = finishTheme === 'lotto-classic' ? 'titanium-gold' : (finishTheme === 'titanium-gold' ? 'obsidian-chrome' : 'lotto-classic');
+      if (finishTheme === 'obsidian-chrome') {
+        brushedTitaniumMat.color.setHex(0x1e293b); brushedGoldMat.color.setHex(0x38bdf8);
+        e.target.textContent = 'Finish: Chrom';
+      } else if (finishTheme === 'titanium-gold') {
+        brushedTitaniumMat.color.setHex(0x334155); brushedGoldMat.color.setHex(0xf59e0b);
+        e.target.textContent = 'Finish: Titan';
+      } else {
+        brushedTitaniumMat.color.setHex(0x27272a); brushedGoldMat.color.setHex(0xfacc15);
+        e.target.textContent = 'Finish: Gold';
+      }
+      syncDraw();
+    };
+    document.getElementById('btn-sound').onclick = (e) => {
+      sound.enabled = !sound.enabled;
+      e.target.textContent = sound.enabled ? '🔊' : '🔇';
+    };
+    const dockEl = document.getElementById('bottom-dock');
+    const toggleDockBtn = document.getElementById('toggle-dock');
+    function toggleDock() {
+      const c = dockEl.classList.toggle('collapsed');
+      toggleDockBtn.textContent = c ? '▴ Steuerung einblenden (H)' : '▾ Steuerung ausblenden (H)';
+    }
+    toggleDockBtn.onclick = toggleDock;
+    window.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT') return;
+      if (e.key.toLowerCase() === 'h') toggleDock();
+    });
+
+    syncDraw();
+
+    const clock = new THREE.Clock();
+    const dummy = new THREE.Object3D();
+    const vecA = new THREE.Vector3();
+    const vecB = new THREE.Vector3();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+
+      let maxVel = 0;
+      for (let i = 0; i < 6; i++) {
+        const tx = START_X + i * CHAMBER_PITCH + (i - 2.5) * explodedFactor * 0.52;
+        chamberGroups[i].position.x = THREE.MathUtils.damp(chamberGroups[i].position.x, tx, 7, dt);
+        subMeshes[i].position.x = THREE.MathUtils.damp(subMeshes[i].position.x, 0.38 + explodedFactor * 0.14, 7, dt);
+
+        if (isSpinning && activeStep > 0 && activeStep <= i + 1) {
+          const sp = activeStep === i + 1 ? 9.5 : 14.0 - i * 0.6;
+          ringAngles[i] -= sp * dt;
+          ringAngles[6 + i] += sp * 0.85 * dt;
+          maxVel = Math.max(maxVel, sp);
+        } else {
+          const prev = ringAngles[i];
+          ringAngles[i] = THREE.MathUtils.damp(ringAngles[i], ringTargets[i], 6.5, dt);
+          ringAngles[6 + i] = THREE.MathUtils.damp(ringAngles[6 + i], ringTargets[6 + i], 6.5, dt);
+          maxVel = Math.max(maxVel, Math.abs(ringAngles[i] - prev) / Math.max(dt, 0.001));
+        }
+        mainMeshes[i].rotation.x = ringAngles[i];
+        subMeshes[i].rotation.x = ringAngles[6 + i];
+      }
+
+      sonderzahlGroup.position.x = THREE.MathUtils.damp(sonderzahlGroup.position.x, SZ_BASE_X + explodedFactor * 1.35, 7, dt);
+      leftStanchion.position.x = THREE.MathUtils.damp(leftStanchion.position.x, -4.25 - explodedFactor * 1.4, 7, dt);
+      rightStanchion.position.x = THREE.MathUtils.damp(rightStanchion.position.x, 4.95 + explodedFactor * 1.6, 7, dt);
+
+      if (isSpinning && activeStep > 0 && activeStep <= 7) {
+        ringAngles[12] -= (activeStep === 7 ? 10.5 : 6.5) * dt;
+      } else {
+        ringAngles[12] = THREE.MathUtils.damp(ringAngles[12], ringTargets[12], 6.0, dt);
+      }
+      szMesh.rotation.x = ringAngles[12];
+
+      if (maxVel > 0.8) sound.playTick(maxVel);
+
+      innerCageGroup.rotation.x -= (isSpinning ? 4.2 : 0.65) * dt;
+
+      // 49 Physical Balls Simulation with X-bounds & Extraction
+      const activeNums = useSorted ? currentDraw.sorted : currentDraw.drawn;
+      const lockedCount = isSpinning ? Math.max(0, activeStep - 1) : 6;
+      const drawnMap = new Map();
+      for (let s = 0; s < lockedCount; s++) drawnMap.set(activeNums[s], s);
+
+      const drumR = 1.24;
+      for (let i = 0; i < 49; i++) {
+        const b = simBalls[i];
+        const slotIdx = drawnMap.get(b.num);
+        if (slotIdx !== undefined) {
+          const cx = chamberGroups[slotIdx].position.x;
+          vecA.set(cx - 0.12, RING_OUTER_R + 0.34, 0.15);
+          b.pos.lerp(vecA, 1 - Math.exp(-9 * dt));
+          b.vel.set(0, 0, 0);
+        } else {
+          b.vel.y -= 9.8 * dt;
+          const rad = Math.hypot(b.pos.y, b.pos.z);
+          if (rad > drumR * 0.72) {
+            const ty = -b.pos.z / Math.max(rad, 0.01), tz = b.pos.y / Math.max(rad, 0.01);
+            const lift = isSpinning ? 11.5 : 3.2;
+            b.vel.y += ty * lift * dt; b.vel.z += tz * lift * dt;
+          }
+          if (isSpinning) {
+            b.vel.x += (Math.random() - 0.5) * 14 * dt;
+            b.vel.y += (Math.random() - 0.42) * 18 * dt;
+            b.vel.z += (Math.random() - 0.5) * 16 * dt;
+          }
+          b.pos.addScaledVector(b.vel, dt);
+          const rNow = Math.hypot(b.pos.y, b.pos.z);
+          if (rNow > drumR) {
+            const ny = b.pos.y / rNow, nz = b.pos.z / rNow;
+            b.pos.y = ny * drumR; b.pos.z = nz * drumR;
+            const dot = b.vel.y * ny + b.vel.z * nz;
+            if (dot > 0) { b.vel.y -= 1.65 * dot * ny; b.vel.z -= 1.65 * dot * nz; }
+          }
+          if (b.pos.x < -3.4) { b.pos.x = -3.4; b.vel.x = Math.abs(b.vel.x) * 0.75; }
+          else if (b.pos.x > 2.7) { b.pos.x = 2.7; b.vel.x = -Math.abs(b.vel.x) * 0.75; }
+          b.vel.multiplyScalar(0.992);
+        }
+        dummy.position.copy(b.pos);
+        dummy.scale.setScalar(slotIdx !== undefined ? 1.18 : 0.92);
+        dummy.updateMatrix();
+        ballsInst.setMatrixAt(i, dummy.matrix);
+      }
+
+      for (let i = 0; i < 49; i++) {
+        if (drawnMap.has(simBalls[i].num)) continue;
+        for (let j = i + 1; j < 49; j++) {
+          if (drawnMap.has(simBalls[j].num)) continue;
+          vecB.subVectors(simBalls[j].pos, simBalls[i].pos);
+          const dist = vecB.length();
+          if (dist > 0.001 && dist < 0.31) {
+            vecB.divideScalar(dist);
+            const ov = (0.31 - dist) * 0.5;
+            simBalls[i].pos.addScaledVector(vecB, -ov);
+            simBalls[j].pos.addScaledVector(vecB, ov);
+          }
+        }
+      }
+      ballsInst.instanceMatrix.needsUpdate = true;
+
+      if (targetCamPos.lengthSq() > 0) {
+        camera.position.lerp(targetCamPos, 1 - Math.exp(-4.5 * dt));
+        controls.target.lerp(targetLookAt, 1 - Math.exp(-4.5 * dt));
+        if (camera.position.distanceTo(targetCamPos) < 0.05) targetCamPos.set(0, 0, 0);
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      const w = container.clientWidth || window.innerWidth;
+      const h = container.clientHeight || (window.innerHeight - 54);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    });
+  </script>
+</body>
+</html>
